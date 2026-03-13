@@ -42,7 +42,7 @@ class rcmail_action_mail_search extends rcmail_action_mail_index
         // get search string
         $str = trim(rcube_utils::get_input_string('_q', rcube_utils::INPUT_GET, true));
         $mbox = trim(rcube_utils::get_input_string('_mbox', rcube_utils::INPUT_GET, true));
-        $filter = trim(rcube_utils::get_input_string('_filter', rcube_utils::INPUT_GET));
+        $filter = str_replace(["\r", "\n"], '', trim(rcube_utils::get_input_string('_filter', rcube_utils::INPUT_GET)));
         $headers = trim(rcube_utils::get_input_string('_headers', rcube_utils::INPUT_GET));
         $scope = trim(rcube_utils::get_input_string('_scope', rcube_utils::INPUT_GET));
         $interval = trim(rcube_utils::get_input_string('_interval', rcube_utils::INPUT_GET));
@@ -213,6 +213,18 @@ class rcmail_action_mail_search extends rcmail_action_mail_index
     public static function search_input($str, $headers = '', $filter = 'ALL', $interval = null)
     {
         $headers = $headers ? explode(',', $headers) : ['subject'];
+
+        // Validate $filter against the known set of IMAP search keywords.
+        // Any value outside this list (including CRLF-injected payloads) is
+        // silently discarded, preventing IMAP command injection via _filter.
+        $allowed_filters = [
+            'ALL', 'UNSEEN', 'SEEN', 'FLAGGED', 'UNFLAGGED',
+            'DELETED', 'UNDELETED', 'ANSWERED', 'UNANSWERED', 'RECENT',
+        ];
+
+        if ($filter && !in_array(strtoupper($filter), $allowed_filters)) {
+            $filter = '';
+        }
 
         // Add list filter string
         $result = $filter && $filter != 'ALL' ? $filter : '';
